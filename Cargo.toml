@@ -5,9 +5,13 @@ readme = "README.md"
 
 name = "conrig"
 version = "0.0.0"
+homepage = "https://github.com/embers-of-the-fire/conrig/"
+repository = "https://github.com/embers-of-fire/conrig.git"
 keywords = ["config", "configuration", "file", "file-system"]
 categories = ["config", "development-tools", "filesystem"]
 description = "Configure once, use anywhere."
+
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 directories = "5.0.1"
