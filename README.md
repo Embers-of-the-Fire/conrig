@@ -1,5 +1,9 @@
 # `conrig`
 
+![Build with Rust](https://img.shields.io/badge/Build%20with-Rust-F74C00?style=for-the-badge)
+![GitHub top language](https://img.shields.io/github/languages/top/embers-of-the-fire/conrig?style=for-the-badge&color=lightgreen)
+![Crates.io Downloads (recent)](https://img.shields.io/crates/dr/conrig?style=for-the-badge&logo=rust)
+
 `conrig` is a configuration file library dedicated to providing a general
 configuration system that can be "configured once, used anywhere".
 
