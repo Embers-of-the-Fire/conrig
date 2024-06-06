@@ -4,7 +4,7 @@ authors = ["embers-of-the-fire <stellarishs@163.com>"]
 readme = "README.md"
 
 name = "conrig"
-version = "0.0.0"
+version = "0.1.0"
 homepage = "https://github.com/embers-of-the-fire/conrig/"
 repository = "https://github.com/embers-of-fire/conrig.git"
 keywords = ["config", "configuration", "file", "file-system"]
