@@ -29,12 +29,16 @@ const TEST_APP_CONFIG: ConfigPathMetadata = ConfigPathMetadata {
         application: "conrig-test",
     },
     config_name: &["conrig"],
+    default_format: FileFormat::Toml, // use TOML as the default format.
+    extra_folders: &[],               // external folders to include.
+    // external files to include.
+    // Note that this behaves differently from `config_name`.
+    extra_files: &[],
     config_option: ConfigOption {
         allow_dot_prefix: true,       // allow parsing files like `.conrig.toml`.
         config_sys_type: ConfigType::Config,
         sys_override_local: false,    // make local configuration the top priority.
-    },
-    default_format: FileFormat::Toml, // use TOML as the default format.
+    }
 };
 ```
 

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 ///
 /// See the crate's documentation for more information.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPathMetadata<'p, 'cn> {
+pub struct ConfigPathMetadata<'p> {
     /// Your application's project path.
     ///
     /// See [`directories::ProjectDirs`] for more information.
@@ -22,19 +22,38 @@ pub struct ConfigPathMetadata<'p, 'cn> {
     /// Your configuration files' names.
     ///
     /// At least one should be specified.
-    pub config_name: &'cn [&'cn str],
+    pub config_name: &'p [&'p str],
     /// The default language of your configuration files.
     pub default_format: FileFormat,
+    /// Extra folders to find & save your config files.
+    pub extra_folders: &'p [&'p str],
+    /// Extra config file paths.
+    ///
+    /// Just set the filename and `conrig` will automatically detect the suffix.
+    ///
+    /// This behaves differently from [`config_name`].
+    /// `conrig` will directly check the external file,
+    /// instead of adding a new possible config file name.
+    ///
+    /// | Field name | Example value | Example paths to find |
+    /// | ---------- | ------------- | --------------------- |
+    /// | `config_name` | `&["conrig", "conrig-cfg"]` | `"/your/project/dir/conrig-cfg.toml"` |
+    /// | `extra_files` | `&["/external/file/centre/cfg"]` | `"/external/file/centre/cfg.toml"` |
+    ///
+    /// [`config_name`]: crate::ConfigPathMetadata#structfield.config_name
+    pub extra_files: &'p [&'p str],
     /// Extra configuration options.
     pub config_option: ConfigOption,
 }
 
-impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
+impl<'p> ConfigPathMetadata<'p> {
     /// Create a new `ConfigPathMetadata`.
     pub const fn new(
         project_path: ProjectPath<'p>,
-        config_name: &'cn [&'cn str],
+        config_name: &'p [&'p str],
         default_format: FileFormat,
+        extra_folders: &'p [&'p str],
+        extra_files: &'p [&'p str],
         config_option: ConfigOption,
     ) -> Self {
         assert!(
@@ -46,6 +65,8 @@ impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
             config_name,
             default_format,
             config_option,
+            extra_folders,
+            extra_files,
         }
     }
 
@@ -60,7 +81,7 @@ impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
     /// Modify the [`config_name`] field.
     ///
     /// [`config_name`]: crate::ConfigPathMetadata#structfield.config_name
-    pub const fn with_config_name(mut self, config_name: &'cn [&'cn str]) -> Self {
+    pub const fn with_config_name(mut self, config_name: &'p [&'p str]) -> Self {
         self.config_name = config_name;
         self
     }
@@ -79,6 +100,22 @@ impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
     /// [`DEFAULT_FILE_FORMAT`]: crate::FileFormat::DEFAULT_FILE_FORMAT
     pub const fn no_default_format(mut self) -> Self {
         self.default_format = FileFormat::DEFAULT_FILE_FORMAT;
+        self
+    }
+
+    /// Modify the [`extra_files`] field.
+    ///
+    /// [`extra_files`]: crate::ConfigPathMetadata#structfield.extra_files
+    pub const fn with_extra_folders(mut self, extra_folders: &'p [&'p str]) -> Self {
+        self.extra_folders = extra_folders;
+        self
+    }
+
+    /// Modify the [`extra_files`] field.
+    ///
+    /// [`extra_files`]: crate::ConfigPathMetadata#structfield.extra_files
+    pub const fn with_extra_files(mut self, extra_files: &'p [&'p str]) -> Self {
+        self.extra_files = extra_files;
         self
     }
 
@@ -176,7 +213,7 @@ impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
     ///
     /// [sys]: crate::ConfigPathMetadata::sys_dir
     /// [`ConfigOption.sys_override_local`]: crate::ConfigOption#structfield.sys_override_local
-    pub fn search_config_file<'a>(&'a self) -> Result<ConfigFile<'a, 'p, 'cn>, ConrigError> {
+    pub fn search_config_file<'a>(&'a self) -> Result<ConfigFile<'a, 'p>, ConrigError> {
         fn make_paths<'a>(
             base: PathBuf,
             names: &'a [&'a str],
@@ -205,13 +242,28 @@ impl<'p, 'cn> ConfigPathMetadata<'p, 'cn> {
         );
 
         let target = {
-            let last = if self.config_option.sys_override_local {
-                sys_files.chain(current_dir_files)
-            } else {
-                current_dir_files.chain(sys_files)
-            }
-            .filter_map(detect_file_format)
-            .next();
+            let last = self
+                .extra_files
+                .iter()
+                .filter_map(|t| detect_file_format(t, self.default_format))
+                .chain(
+                    self.extra_folders
+                        .iter()
+                        .flat_map(|t| {
+                            make_paths(
+                                PathBuf::from(t),
+                                self.config_name,
+                                self.config_option.allow_dot_prefix,
+                            )
+                        })
+                        .chain(if self.config_option.sys_override_local {
+                            sys_files.chain(current_dir_files)
+                        } else {
+                            current_dir_files.chain(sys_files)
+                        })
+                        .filter_map(|t| detect_file_format(t, self.default_format)),
+                )
+                .next();
             if let Some((path, file_format)) = last {
                 ConfigFile::new(file_format, Some(path), self)
             } else {

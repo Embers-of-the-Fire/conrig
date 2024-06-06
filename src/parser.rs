@@ -77,7 +77,7 @@ impl FileFormat {
             #[cfg(feature = "ron")]
             Self::Ron => "ron",
 
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -134,9 +134,9 @@ impl FileFormat {
 }
 
 /// Checks if the configuration file **name** exists, and returns the language it uses.
-/// 
+///
 /// This will check one by one if the file corresponding to a specific file extension exists.
-/// 
+///
 /// Sequence:
 /// 1. `toml` ;
 /// 2. `json` ;
@@ -145,12 +145,16 @@ impl FileFormat {
 /// 5. `ron` ;
 pub fn detect_file_format(
     path: impl AsRef<Path>,
+    default_format: FileFormat,
 ) -> Option<(PathBuf, FileFormat)> {
     let path = path.as_ref().to_path_buf();
 
     macro_rules! try_open {
         ($($ext:literal)|+ => $ty:ident) => {$(
-            let path = path.with_extension($ext);
+            let mut ext = path.extension()?.to_os_string();
+            ext.push(".");
+            ext.push($ext);
+            let path = path.with_extension(ext);
             if std::fs::File::open(&path).is_ok() {
                 return Some((path, FileFormat::$ty));
             }
@@ -166,44 +170,48 @@ pub fn detect_file_format(
     #[cfg(feature = "ron")]
     try_open!("ron" => Ron);
 
+    if std::fs::File::open(&path).is_ok() {
+        return Some((path, default_format));
+    }
+
     None
 }
 
 /// A possibly existing configuration file.
-/// 
+///
 /// Keeping this in your programmes is not suggested typically.
 /// Instead, construct it with [`ConfigPathMetaData`] where it's used.
-/// 
+///
 /// [`ConfigPathMetaData`]: crate::ConfigPathMetadata
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ConfigFile<'a, 'p, 'cn> {
+pub struct ConfigFile<'a, 'p> {
     /// The format of the configuration file.
     pub file_format: FileFormat,
     /// The path of the configuration file.
-    /// 
+    ///
     /// If the configuration file does exist, this should never be a `None`.
     /// However, sometimes there's no configuration file available,
     /// then this field will be set to `None`.
-    /// 
+    ///
     /// If this field is `None` and either [`read`] or [`write`] is called,
     /// then a [`NoConfigurationFile`] error will be returned.
-    /// 
+    ///
     /// [`read`]: crate::parser::ConfigFile::read
     /// [`write`]: crate::parser::ConfigFile::write
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
     pub path: Option<PathBuf>,
     /// The configuration that created this `ConfigFile`.
-    config: &'a ConfigPathMetadata<'p, 'cn>,
+    config: &'a ConfigPathMetadata<'p>,
 }
 
-impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
+impl<'a, 'p> ConfigFile<'a, 'p> {
     /// Create a new `ConfigFile`.
-    /// 
+    ///
     /// This is never suggested to use, but still publicly available for special needs.
     pub fn new(
         file_format: FileFormat,
         path: Option<PathBuf>,
-        config: &'a ConfigPathMetadata<'p, 'cn>,
+        config: &'a ConfigPathMetadata<'p>,
     ) -> Self {
         Self {
             file_format,
@@ -213,7 +221,7 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
     }
 
     /// Set a fallback path for the configuration file.
-    /// 
+    ///
     /// If the inner `path` is `None`, then overrides it.
     pub fn fallback_path(mut self, path: PathBuf) -> Self {
         if self.path.is_none() {
@@ -221,11 +229,11 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
         }
         self
     }
-    
+
     /// Set the default configuration file path of the system as a fallback path for the configuration file.
     ///
     /// If the inner `path` is `None`, then overrides it with [`default_sys_config_file`].
-    /// 
+    ///
     /// [`default_sys_config_file`]: crate::ConfigPathMetadata::default_sys_config_file
     pub fn fallback_default_sys(mut self) -> Result<Self, ConrigError> {
         if self.path.is_none() {
@@ -245,7 +253,7 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
         }
         Ok(self)
     }
-    
+
     /// Set the default configuration file path as a fallback path for the configuration file.
     ///
     /// If the inner `path` is `None`, then overrides it with [`default_config_file`].
@@ -259,9 +267,9 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
     }
 
     /// Read and deserialize the configuration file. Fail if the configuration doesn't exist.
-    /// 
+    ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
-    /// 
+    ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
     pub fn read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
         if let Some(path) = &self.path {
@@ -277,7 +285,7 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
             Err(ConrigError::NoConfigurationFile)
         }
     }
-    
+
     /// Serialize and write a value into the configuration file.
     ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
@@ -306,7 +314,10 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
-    pub fn read_or_new<T: Serialize + DeserializeOwned>(&self, default: T) -> Result<T, ConrigError> {
+    pub fn read_or_new<T: Serialize + DeserializeOwned>(
+        &self,
+        default: T,
+    ) -> Result<T, ConrigError> {
         if let Some(path) = &self.path {
             if path.exists() {
                 self.read()
@@ -320,13 +331,13 @@ impl<'a, 'p, 'cn> ConfigFile<'a, 'p, 'cn> {
             Err(ConrigError::NoConfigurationFile)
         }
     }
-    
+
     /// Read and deserialize the configuration file.
     /// If the configuration file doesn't exist, a new configuration file will be created,
     /// and it will be filled with the default value of your structure.
     ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
-    /// 
+    ///
     /// This calls [`read_or_new`] internally.
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
