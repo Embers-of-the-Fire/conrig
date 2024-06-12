@@ -107,23 +107,12 @@ pub enum ConrigError {
         LangError,
     ),
 
-    #[cfg(not(feature = "collapse-io-error"))]
-    #[cfg_attr(docsrs, doc(cfg(not(feature = "collapse-io-error"))))]
     /// Error triggered during the writing or reading of a configuration file.
     #[error("File system error: {0}")]
     FileSystemError(
         #[from]
         #[source]
         FileSystemError,
-    ),
-
-    #[cfg(feature = "collapse-io-error")]
-    /// Error triggered during the writing or reading of a configuration file.
-    #[error("File system error: {0}")]
-    FileSystemError(
-        #[from]
-        #[source]
-        IoError,
     ),
 
     /// This error indicates that the configuration cannot be found by the file searcher.
@@ -230,8 +219,6 @@ pub enum ParserError {
 
 #[cfg(feature = "full-desc")]
 /// Error triggered by the file system, most probably by the operating system.
-#[cfg(not(feature = "collapse-io-error"))]
-#[cfg_attr(docsrs, doc(cfg(not(feature = "collapse-io-error"))))]
 #[derive(Debug, Error)]
 pub enum FileSystemError {
     /// Error occurred during the opening of a file or directory.
@@ -252,7 +239,6 @@ pub enum FileSystemError {
 
 #[cfg(not(feature = "full-desc"))]
 /// Error triggered by the file system, most probably by the operating system.
-#[cfg(not(feature = "collapse-io-error"))]
 #[derive(Debug, Error)]
 pub enum FileSystemError {
     #[error("Cannot open configuration file.")]

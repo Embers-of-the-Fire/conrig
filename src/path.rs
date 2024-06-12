@@ -1,6 +1,6 @@
 //! Path finder and metadata configuration.
 
-use crate::parser::{ConfigFile, FileFormat};
+use crate::parser::{RawConfigFile, FileFormat};
 use crate::{detect_file_format, ConrigError, FileSystemError};
 use directories::ProjectDirs;
 use serde::de::DeserializeOwned;
@@ -213,7 +213,7 @@ impl<'p> ConfigPathMetadata<'p> {
     ///
     /// [sys]: crate::ConfigPathMetadata::sys_dir
     /// [`ConfigOption.sys_override_local`]: crate::ConfigOption#structfield.sys_override_local
-    pub fn search_config_file<'a>(&'a self) -> Result<ConfigFile<'a, 'p>, ConrigError> {
+    pub fn search_config_file<'a>(&'a self) -> Result<RawConfigFile<'a, 'p>, ConrigError> {
         fn make_paths<'a>(
             base: PathBuf,
             names: &'a [&'a str],
@@ -265,9 +265,9 @@ impl<'p> ConfigPathMetadata<'p> {
                 )
                 .next();
             if let Some((path, file_format)) = last {
-                ConfigFile::new(file_format, Some(path), self)
+                RawConfigFile::new(file_format, Some(path), self)
             } else {
-                ConfigFile::new(self.default_format, None, self)
+                RawConfigFile::new(self.default_format, None, self)
             }
         };
 

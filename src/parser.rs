@@ -182,9 +182,14 @@ pub fn detect_file_format(
 /// Keeping this in your programmes is not suggested typically.
 /// Instead, construct it with [`ConfigPathMetaData`] where it's used.
 ///
+/// Different from [`ConfigFile`], this contains a nullable source
+/// path, hence the `read`/`write` methods may possibly throw an error,
+/// or may lead to undefined behavior (if you use `unsafe_xxx`)
+/// like unwrapping a `Option::None`.
+///
 /// [`ConfigPathMetaData`]: crate::ConfigPathMetadata
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ConfigFile<'a, 'p> {
+pub struct RawConfigFile<'a, 'p> {
     /// The format of the configuration file.
     pub file_format: FileFormat,
     /// The path of the configuration file.
@@ -196,6 +201,9 @@ pub struct ConfigFile<'a, 'p> {
     /// If this field is `None` and either [`read`] or [`write`] is called,
     /// then a [`NoConfigurationFile`] error will be returned.
     ///
+    /// To ensure the configuration file is available,
+    /// check [`ConfigFile`] or methods returning that.
+    ///
     /// [`read`]: crate::parser::ConfigFile::read
     /// [`write`]: crate::parser::ConfigFile::write
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
@@ -204,8 +212,8 @@ pub struct ConfigFile<'a, 'p> {
     config: &'a ConfigPathMetadata<'p>,
 }
 
-impl<'a, 'p> ConfigFile<'a, 'p> {
-    /// Create a new `ConfigFile`.
+impl<'a, 'p> RawConfigFile<'a, 'p> {
+    /// Create a new `RawConfigFile`.
     ///
     /// This is never suggested to use, but still publicly available for special needs.
     pub fn new(
@@ -223,11 +231,11 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
     /// Set a fallback path for the configuration file.
     ///
     /// If the inner `path` is `None`, then overrides it.
-    pub fn fallback_path(mut self, path: PathBuf) -> Self {
-        if self.path.is_none() {
-            self.path = Some(path);
+    pub fn fallback_path(self, path: PathBuf) -> ConfigFile {
+        ConfigFile {
+            file_format: self.file_format,
+            path: self.path.ok_or(()).unwrap_or(path),
         }
-        self
     }
 
     /// Set the default configuration file path of the system as a fallback path for the configuration file.
@@ -235,11 +243,14 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
     /// If the inner `path` is `None`, then overrides it with [`default_sys_config_file`].
     ///
     /// [`default_sys_config_file`]: crate::ConfigPathMetadata::default_sys_config_file
-    pub fn fallback_default_sys(mut self) -> Result<Self, ConrigError> {
-        if self.path.is_none() {
-            self.path = Some(self.config.default_sys_config_file()?);
-        }
-        Ok(self)
+    pub fn fallback_default_sys(self) -> Result<ConfigFile, ConrigError> {
+        Ok(ConfigFile {
+            file_format: self.file_format,
+            path: self
+                .path
+                .ok_or(())
+                .or_else(|_| self.config.default_sys_config_file())?,
+        })
     }
 
     /// Set the default configuration file path of the local directory as a fallback path for the configuration file.
@@ -247,11 +258,14 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
     /// If the inner `path` is `None`, then overrides it with [`default_local_config_file`].
     ///
     /// [`default_local_config_file`]: crate::ConfigPathMetadata::default_local_config_file
-    pub fn fallback_default_local(mut self) -> Result<Self, ConrigError> {
-        if self.path.is_none() {
-            self.path = Some(self.config.default_local_config_file()?);
-        }
-        Ok(self)
+    pub fn fallback_default_local(self) -> Result<ConfigFile, ConrigError> {
+        Ok(ConfigFile {
+            file_format: self.file_format,
+            path: self
+                .path
+                .ok_or(())
+                .or_else(|_| self.config.default_local_config_file())?,
+        })
     }
 
     /// Set the default configuration file path as a fallback path for the configuration file.
@@ -259,11 +273,14 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
     /// If the inner `path` is `None`, then overrides it with [`default_config_file`].
     ///
     /// [`default_config_file`]: crate::ConfigPathMetadata::default_config_file
-    pub fn fallback_default(mut self) -> Result<Self, ConrigError> {
-        if self.path.is_none() {
-            self.path = Some(self.config.default_config_file()?);
-        }
-        Ok(self)
+    pub fn fallback_default(self) -> Result<ConfigFile, ConrigError> {
+        Ok(ConfigFile {
+            file_format: self.file_format,
+            path: self
+                .path
+                .ok_or(())
+                .or_else(|_| self.config.default_config_file())?,
+        })
     }
 
     /// Read and deserialize the configuration file. Fail if the configuration doesn't exist.
@@ -286,6 +303,26 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
         }
     }
 
+    /// Read and deserialize the configuration file. Fail if the configuration doesn't exist.
+    ///
+    /// ## Safety
+    ///
+    /// This directly unwrap the [`path`] field. You must ensure that
+    /// the configuration file path is valid and exists.
+    ///
+    /// [`path`]: crate::parser::ConfigFile#structfield.path
+    pub unsafe fn unsafe_read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
+        let path = unsafe { self.path.as_ref().unwrap_unchecked() };
+        let file = fs::File::open(path).map_err(FileSystemError::OpenConfig)?;
+        let mut buf_reader = BufReader::new(file);
+        let mut contents = String::new();
+        buf_reader
+            .read_to_string(&mut contents)
+            .map_err(FileSystemError::ReadConfig)?;
+        let result = self.file_format.read_str(&contents)?;
+        Ok(result)
+    }
+
     /// Serialize and write a value into the configuration file.
     ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
@@ -305,6 +342,27 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
         } else {
             Err(ConrigError::NoConfigurationFile)
         }
+    }
+
+    /// Serialize and write a value into the configuration file.
+    ///
+    /// ## Safety
+    ///
+    /// This directly unwrap the [`path`] field. You must ensure that
+    /// the configuration file path is valid and exists.
+    ///
+    /// [`path`]: crate::parser::ConfigFile#structfield.path
+    pub unsafe fn unsafe_write<T: Serialize>(&self, value: &T) -> Result<(), ConrigError> {
+        let path = unsafe { self.path.as_ref().unwrap_unchecked() };
+        fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
+            .map_err(FileSystemError::WriteConfig)?;
+        let mut file = fs::File::options()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(path)
+            .map_err(FileSystemError::OpenConfig)?;
+        self.file_format.write(value, &mut file)
     }
 
     /// Read and deserialize the configuration file.
@@ -329,6 +387,148 @@ impl<'a, 'p> ConfigFile<'a, 'p> {
             }
         } else {
             Err(ConrigError::NoConfigurationFile)
+        }
+    }
+
+    /// Read and deserialize the configuration file.
+    /// If the configuration file doesn't exist, a new configuration file will be created,
+    /// and it will be filled with the default value provided.
+    ///
+    /// ## Safety
+    ///
+    /// This directly unwrap the [`path`] field. You must ensure that
+    /// the configuration file path is valid and exists.
+    ///
+    /// [`path`]: crate::parser::ConfigFile#structfield.path
+    pub unsafe fn unsafe_read_or_new<T: Serialize + DeserializeOwned>(
+        &self,
+        default: T,
+    ) -> Result<T, ConrigError> {
+        let path = unsafe { self.path.as_ref().unwrap_unchecked() };
+        if path.exists() {
+            self.read()
+        } else {
+            fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
+                .map_err(FileSystemError::WriteConfig)?;
+            self.write(&default)?;
+            Ok(default)
+        }
+    }
+
+    /// Read and deserialize the configuration file.
+    /// If the configuration file doesn't exist, a new configuration file will be created,
+    /// and it will be filled with the default value of your structure.
+    ///
+    /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
+    ///
+    /// This calls [`read_or_new`] internally.
+    ///
+    /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
+    /// [`read_or_new`]: crate::parser::ConfigFile::read_or_new
+    pub fn read_or_default<T: Serialize + DeserializeOwned + Default>(
+        &self,
+    ) -> Result<T, ConrigError> {
+        self.read_or_new(T::default())
+    }
+
+    /// Read and deserialize the configuration file.
+    /// If the configuration file doesn't exist, a new configuration file will be created,
+    /// and it will be filled with the default value of your structure.
+    ///
+    /// This calls [`unsafe_read_or_new`] internally.
+    ///
+    /// ## Safety
+    ///
+    /// This directly unwrap the [`path`] field. You must ensure that
+    /// the configuration file path is valid and exists.
+    ///
+    /// [`path`]: crate::parser::ConfigFile#structfield.path
+    /// [`unsafe_read_or_new`]: crate::parser::ConfigFile#method.unsafe_read_or_new
+    pub unsafe fn unsafe_read_or_default<T: Serialize + DeserializeOwned + Default>(
+        &self,
+    ) -> Result<T, ConrigError> {
+        unsafe { self.unsafe_read_or_new(T::default()) }
+    }
+}
+
+/// A possibly existing configuration file.
+///
+/// Keeping this in your programmes is not suggested typically.
+/// Instead, construct it with [`ConfigPathMetaData`] where it's used.
+///
+/// Different from [`RawConfigFile`], this contains a never nullable source
+/// path.
+///
+/// [`ConfigPathMetaData`]: crate::ConfigPathMetadata
+pub struct ConfigFile {
+    /// The format of the configuration file.
+    pub file_format: FileFormat,
+    /// The path of the configuration file.
+    pub path: PathBuf,
+}
+
+impl ConfigFile {
+    /// Create a new `ConfigFile`.
+    ///
+    /// This is never suggested to use, but still publicly available for special needs.
+    pub fn new(file_format: FileFormat, path: PathBuf) -> Self {
+        Self { file_format, path }
+    }
+
+    /// Read and deserialize the configuration file. Fail if the configuration doesn't exist.
+    ///
+    /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
+    ///
+    /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
+    pub fn read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
+        let path = &self.path;
+        let file = fs::File::open(path).map_err(FileSystemError::OpenConfig)?;
+        let mut buf_reader = BufReader::new(file);
+        let mut contents = String::new();
+        buf_reader
+            .read_to_string(&mut contents)
+            .map_err(FileSystemError::ReadConfig)?;
+        let result = self.file_format.read_str(&contents)?;
+        Ok(result)
+    }
+
+    /// Serialize and write a value into the configuration file.
+    ///
+    /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
+    ///
+    /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
+    pub fn write<T: Serialize>(&self, value: &T) -> Result<(), ConrigError> {
+        let path = &self.path;
+        fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
+            .map_err(FileSystemError::WriteConfig)?;
+        let mut file = fs::File::options()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(path)
+            .map_err(FileSystemError::OpenConfig)?;
+        self.file_format.write(value, &mut file)
+    }
+
+    /// Read and deserialize the configuration file.
+    /// If the configuration file doesn't exist, a new configuration file will be created,
+    /// and it will be filled with the default value provided.
+    ///
+    /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
+    ///
+    /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
+    pub fn read_or_new<T: Serialize + DeserializeOwned>(
+        &self,
+        default: T,
+    ) -> Result<T, ConrigError> {
+        let path = &self.path;
+        if path.exists() {
+            self.read()
+        } else {
+            fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
+                .map_err(FileSystemError::WriteConfig)?;
+            self.write(&default)?;
+            Ok(default)
         }
     }
 
