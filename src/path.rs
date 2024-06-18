@@ -1,6 +1,6 @@
 //! Path finder and metadata configuration.
 
-use crate::parser::{RawConfigFile, FileFormat};
+use crate::parser::{FileFormat, RawConfigFile};
 use crate::{detect_file_format, ConrigError, FileSystemError};
 use directories::ProjectDirs;
 use serde::de::DeserializeOwned;
@@ -127,58 +127,11 @@ impl<'p> ConfigPathMetadata<'p> {
         self
     }
 
-    /// Get the configuration directory of your application.
-    ///
-    /// See [`directories::ProjectDirs::config_dir`] for more information.
-    pub fn sys_config_dir(&self) -> Option<PathBuf> {
-        Some(
-            ProjectDirs::from(
-                self.project_path.qualifier,
-                self.project_path.organization,
-                self.project_path.application,
-            )?
-            .config_dir()
-            .into(),
-        )
-    }
-
-    /// Get the preference directory of your application.
-    ///
-    /// See [`directories::ProjectDirs::preference_dir`] for more information.
-    pub fn sys_preference_dir(&self) -> Option<PathBuf> {
-        Some(
-            ProjectDirs::from(
-                self.project_path.qualifier,
-                self.project_path.organization,
-                self.project_path.application,
-            )?
-            .preference_dir()
-            .into(),
-        )
-    }
-
-    /// Get the system-level config directory of your application.
-    ///
-    /// Depends on [`ConfigOption.config_sys_type`]:
-    /// - [`Preference`][pref]: [`sys_preference_dir`].
-    /// - [`Config`][config]: [`sys_config_dir`].
-    ///
-    /// [`ConfigOption.config_sys_type`]: crate::ConfigOption#strutfield.config_sys_type
-    /// [pref]: crate::ConfigType::Preference
-    /// [config]: crate::ConfigType::Config
-    /// [`sys_preference_dir`]: crate::ConfigPathMetadata::sys_preference_dir
-    /// [`sys_config_dir`]: crate::ConfigPathMetadata::sys_config_dir
-    pub fn sys_dir(&self) -> Option<PathBuf> {
-        match self.config_option.config_sys_type {
-            ConfigType::Preference => self.sys_preference_dir(),
-            ConfigType::Config => self.sys_config_dir(),
-        }
-    }
-
     /// Format the default system-level configuration file.
     pub fn default_sys_config_file(&self) -> Result<PathBuf, ConrigError> {
         Ok(self
-            .sys_dir()
+            .project_path
+            .sys_dir(self.config_option.config_sys_type)
             .ok_or(FileSystemError::NoProjectDirectory)?
             .join(self.config_name[0])
             .with_extension(self.default_format.extension()))
@@ -228,7 +181,10 @@ impl<'p> ConfigPathMetadata<'p> {
             })
         }
 
-        let sys_dir = self.sys_dir().ok_or(FileSystemError::NoProjectDirectory)?;
+        let sys_dir = self
+            .project_path
+            .sys_dir(self.config_option.config_sys_type)
+            .ok_or(FileSystemError::NoProjectDirectory)?;
         let sys_files = make_paths(
             sys_dir,
             self.config_name,
@@ -433,5 +389,45 @@ impl<'a> ProjectPath<'a> {
     pub const fn with_application(mut self, application: &'a str) -> Self {
         self.application = application;
         self
+    }
+
+    /// Get the configuration directory of your application.
+    ///
+    /// See [`directories::ProjectDirs::config_dir`] for more information.
+    pub fn sys_config_dir(&self) -> Option<PathBuf> {
+        Some(
+            ProjectDirs::from(self.qualifier, self.organization, self.application)?
+                .config_dir()
+                .into(),
+        )
+    }
+
+    /// Get the preference directory of your application.
+    ///
+    /// See [`directories::ProjectDirs::preference_dir`] for more information.
+    pub fn sys_preference_dir(&self) -> Option<PathBuf> {
+        Some(
+            ProjectDirs::from(self.qualifier, self.organization, self.application)?
+                .preference_dir()
+                .into(),
+        )
+    }
+
+    /// Get the system-level config directory of your application.
+    ///
+    /// Depends on [`ConfigOption.config_sys_type`]:
+    /// - [`Preference`][pref]: [`sys_preference_dir`].
+    /// - [`Config`][config]: [`sys_config_dir`].
+    ///
+    /// [`ConfigOption.config_sys_type`]: crate::ConfigOption#strutfield.config_sys_type
+    /// [pref]: crate::ConfigType::Preference
+    /// [config]: crate::ConfigType::Config
+    /// [`sys_preference_dir`]: crate::ConfigPathMetadata::sys_preference_dir
+    /// [`sys_config_dir`]: crate::ConfigPathMetadata::sys_config_dir
+    pub fn sys_dir(&self, cfg_sys_type: ConfigType) -> Option<PathBuf> {
+        match cfg_sys_type {
+            ConfigType::Preference => self.sys_preference_dir(),
+            ConfigType::Config => self.sys_config_dir(),
+        }
     }
 }

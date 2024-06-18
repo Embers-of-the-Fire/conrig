@@ -1,5 +1,10 @@
 # Changelog
 
+## V 0.3.0
+
+- Move `ConfigPathMetadata::sys_config_dir`, `ConfigPathMetadata::sys_preference_dir`
+  and `ConfigPathMetadata::sys_dir`'s implementation to `ProjectPath`.
+
 ## V 0.2.0
 
 - Rename old `ConfigFile` to `RawConfigFile`, and add a checked version of `ConfigFile`.
