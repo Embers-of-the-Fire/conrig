@@ -19,29 +19,9 @@
 //! 
 //! Here's an example:
 //! 
-//! ```rust
-//! use conrig::{ConfigOption, ConfigPathMetadata, FileFormat, ProjectPath, ConfigType};
+//! ### Example
 //! 
-//! const TEST_APP_CONFIG: ConfigPathMetadata = ConfigPathMetadata {
-//!     project_path: ProjectPath {
-//!         qualifier: "org",
-//!         organization: "my-organization",
-//!         application: "conrig-test",
-//!     },
-//!     config_name: &["conrig"],
-//!     default_format: FileFormat::Toml, // use TOML as the default format.
-//!     extra_folders: &[],               // external folders to include.
-//!     extra_files: &[],                 // external files to include.
-//!                                       // Note that this behaves differently from `config_name`.
-//!     config_option: ConfigOption {
-//!         allow_dot_prefix: true,       // allow parsing files like `.conrig.toml`.
-//!         config_sys_type: ConfigType::Config,
-//!         sys_override_local: false,    // make local configuration the top priority.
-//!     }
-//! };
-//! ```
-//! 
-//! Then, define your config data structure:
+//! First, define your config data structure:
 //! 
 //! ```rust
 //! use serde_derive::{Serialize, Deserialize};
@@ -62,12 +42,54 @@
 //! }
 //! ```
 //! 
+//! Then, create a `conrig` configuration item:
+//! 
+//! ```rust
+//! use conrig::{ConfigOption, ConfigPathMetadata, FileFormat, ProjectPath, ConfigType, conrig};
+//! 
+//! # struct Config {
+//! #     name: String,
+//! #     id: u32,
+//! # }
+//! conrig!(const TEST_APP_CONFIG<Config> = {
+//!     project_path: ProjectPath {
+//!         qualifier: "org",
+//!         organization: "my-organization",
+//!         application: "conrig-test",
+//!     },
+//!     config_name: &["conrig"],
+//!     default_format: FileFormat::Toml, // use TOML as the default format.
+//!     extra_folders: &[],               // external folders to include.
+//!     extra_files: &[],                 // external files to include.
+//!                                       // Note that this behaves differently from `config_name`.
+//!     config_option: ConfigOption {
+//!         allow_dot_prefix: true,       // allow parsing files like `.conrig.toml`.
+//!         config_sys_type: ConfigType::Config,
+//!         sys_override_local: false,    // make local configuration the top priority.
+//!     }
+//! });
+//! ```
+//! 
 //! Now you can start enjoying `conrig`'s automatic configuration setting:
 //! 
 //! ```rust
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # use conrig::{ConfigOption, ConfigPathMetadata, FileFormat, ProjectPath, ConfigType};
-//! # const TEST_APP_CONFIG: ConfigPathMetadata = ConfigPathMetadata {
+//! # use serde_derive::{Serialize, Deserialize};
+//! # #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+//! # struct Config {
+//! #     name: String,
+//! #     id: u32,
+//! # }
+//! # impl Default for Config {
+//! #     fn default() -> Self {
+//! #         Self {
+//! #             name: "conrig".to_owned(),
+//! #             id: 0,
+//! #         }
+//! #     }
+//! # }
+//! # use conrig::{ConfigOption, ConfigPathMetadata, FileFormat, ProjectPath, ConfigType, conrig};
+//! # conrig!(const TEST_APP_CONFIG<Config> = {
 //! #     project_path: ProjectPath {
 //! #         qualifier: "org",
 //! #         organization: "my-organization",
@@ -83,28 +105,14 @@
 //! #         config_sys_type: ConfigType::Config,
 //! #         sys_override_local: false,    // make local configuration the top priority.
 //! #     },
-//! # };
-//! # use serde_derive::{Serialize, Deserialize};
-//! # #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-//! # struct Config {
-//! #     name: String,
-//! #     id: u32,
-//! # }
-//! # impl Default for Config {
-//! #     fn default() -> Self {
-//! #         Self {
-//! #             name: "conrig".to_owned(),
-//! #             id: 0,
-//! #         }
-//! #     }
-//! # }
+//! # });
 //! // read a config
-//! let config: Config = TEST_APP_CONFIG
+//! let config = TEST_APP_CONFIG
 //!     .search_config_file()? // search existing config files.
 //!     .fallback_default()?   // set fallback path to your current directory.
 //!     .read_or_default()?;   // read the config, or insert the default one.
 //! // or use the shortcut
-//! let mut config: Config = TEST_APP_CONFIG.read_or_default()?;
+//! let mut config = TEST_APP_CONFIG.read_or_default()?;
 //!
 //! assert_eq!(
 //!     config,
@@ -119,7 +127,7 @@
 //! TEST_APP_CONFIG.write(&config)?;
 //! 
 //! assert_eq!(
-//!     TEST_APP_CONFIG.read::<Config>()?,
+//!     TEST_APP_CONFIG.read()?,
 //!     Config {
 //!         name: "conrig".to_owned(),
 //!         id: 42,
@@ -139,6 +147,7 @@
 pub mod error;
 pub mod parser;
 pub mod path;
+pub mod macros;
 
 pub use error::{ConrigError, LangError};
 pub use parser::{detect_file_format, FileFormat};

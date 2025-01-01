@@ -6,6 +6,7 @@ use directories::ProjectDirs;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::env::current_dir;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 
 /// The main entry point of `conrig`.
@@ -14,7 +15,7 @@ use std::path::PathBuf;
 ///
 /// See the crate's documentation for more information.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPathMetadata<'p> {
+pub struct ConfigPathMetadata<'p, T> {
     /// Your application's project path.
     ///
     /// See [`directories::ProjectDirs`] for more information.
@@ -44,9 +45,10 @@ pub struct ConfigPathMetadata<'p> {
     pub extra_files: &'p [&'p str],
     /// Extra configuration options.
     pub config_option: ConfigOption,
+    pub _marker: PhantomData<T>,
 }
 
-impl<'p> ConfigPathMetadata<'p> {
+impl<'p, T> ConfigPathMetadata<'p, T> {
     /// Create a new `ConfigPathMetadata`.
     pub const fn new(
         project_path: ProjectPath<'p>,
@@ -67,6 +69,7 @@ impl<'p> ConfigPathMetadata<'p> {
             config_option,
             extra_folders,
             extra_files,
+            _marker: PhantomData,
         }
     }
 
@@ -166,7 +169,7 @@ impl<'p> ConfigPathMetadata<'p> {
     ///
     /// [sys]: crate::ConfigPathMetadata::sys_dir
     /// [`ConfigOption.sys_override_local`]: crate::ConfigOption#structfield.sys_override_local
-    pub fn search_config_file<'a>(&'a self) -> Result<RawConfigFile<'a, 'p>, ConrigError> {
+    pub fn search_config_file<'a>(&'a self) -> Result<RawConfigFile<'a, 'p, T>, ConrigError> {
         fn make_paths<'a>(
             base: PathBuf,
             names: &'a [&'a str],
@@ -229,49 +232,51 @@ impl<'p> ConfigPathMetadata<'p> {
 
         Ok(target)
     }
+}
 
+impl<'p, T: DeserializeOwned> ConfigPathMetadata<'p, T> {
     // shortcut methods
 
     /// Read a configuration file, using the default searching method.
     ///
     /// This is equivalent to
     /// `self.search_config_file()?.fallback_default()?.read()`.
-    pub fn read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
+    pub fn read(&self) -> Result<T, ConrigError> {
         self.search_config_file()?.fallback_default()?.read()
     }
-
+}
+impl<'p, T: Serialize> ConfigPathMetadata<'p, T> {
     /// Write into a configuration file, using the default searching method.
     ///
     /// This is equivalent to
     /// `self.search_config_file()?.fallback_default()?.write(&foo)`.
-    pub fn write<T: Serialize>(&self, value: &T) -> Result<(), ConrigError> {
+    pub fn write(&self, value: &T) -> Result<(), ConrigError> {
         self.search_config_file()?.fallback_default()?.write(value)
     }
+}
 
-    /// Read a configuration file, or creating a new one with the `default` value.
-    ///
-    /// This is equivalent to
-    /// `self.search_config_file()?.fallback_default()?.read_or_default::<T>()`.
-    pub fn read_or_default<T: Serialize + DeserializeOwned + Default>(
-        &self,
-    ) -> Result<T, ConrigError> {
-        self.search_config_file()?
-            .fallback_default()?
-            .read_or_default()
-    }
-
+impl<'p, T: Serialize + DeserializeOwned> ConfigPathMetadata<'p, T> {
     /// Read a configuration file,
     /// or creating a new one with the default value provided.
     ///
     /// This is equivalent to
     /// `self.search_config_file()?.fallback_default()?.read_or_default::<T>()`.
-    pub fn read_or_new<T: Serialize + DeserializeOwned>(
-        &self,
-        default: T,
-    ) -> Result<T, ConrigError> {
+    pub fn read_or_new(&self, default: T) -> Result<T, ConrigError> {
         self.search_config_file()?
             .fallback_default()?
             .read_or_new(default)
+    }
+}
+
+impl<'p, T: Serialize + DeserializeOwned + Default> ConfigPathMetadata<'p, T> {
+    /// Read a configuration file, or creating a new one with the `default` value.
+    ///
+    /// This is equivalent to
+    /// `self.search_config_file()?.fallback_default()?.read_or_default::<T>()`.
+    pub fn read_or_default(&self) -> Result<T, ConrigError> {
+        self.search_config_file()?
+            .fallback_default()?
+            .read_or_default()
     }
 }
 

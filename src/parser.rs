@@ -189,7 +189,7 @@ pub fn detect_file_format(
 ///
 /// [`ConfigPathMetaData`]: crate::ConfigPathMetadata
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RawConfigFile<'a, 'p> {
+pub struct RawConfigFile<'a, 'p, T> {
     /// The format of the configuration file.
     pub file_format: FileFormat,
     /// The path of the configuration file.
@@ -209,17 +209,17 @@ pub struct RawConfigFile<'a, 'p> {
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
     pub path: Option<PathBuf>,
     /// The configuration that created this `ConfigFile`.
-    config: &'a ConfigPathMetadata<'p>,
+    config: &'a ConfigPathMetadata<'p, T>,
 }
 
-impl<'a, 'p> RawConfigFile<'a, 'p> {
+impl<'a, 'p, T> RawConfigFile<'a, 'p, T> {
     /// Create a new `RawConfigFile`.
     ///
     /// This is never suggested to use, but still publicly available for special needs.
     pub fn new(
         file_format: FileFormat,
         path: Option<PathBuf>,
-        config: &'a ConfigPathMetadata<'p>,
+        config: &'a ConfigPathMetadata<'p, T>,
     ) -> Self {
         Self {
             file_format,
@@ -282,13 +282,15 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
                 .or_else(|_| self.config.default_config_file())?,
         })
     }
+}
 
+impl<'a, 'p, T: DeserializeOwned> RawConfigFile<'a, 'p, T> {
     /// Read and deserialize the configuration file. Fail if the configuration doesn't exist.
     ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
-    pub fn read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
+    pub fn read(&self) -> Result<T, ConrigError> {
         if let Some(path) = &self.path {
             let file = fs::File::open(path).map_err(FileSystemError::OpenConfig)?;
             let mut buf_reader = BufReader::new(file);
@@ -311,7 +313,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     /// the configuration file path is valid and exists.
     ///
     /// [`path`]: crate::parser::ConfigFile#structfield.path
-    pub unsafe fn unsafe_read<T: DeserializeOwned>(&self) -> Result<T, ConrigError> {
+    pub unsafe fn unsafe_read(&self) -> Result<T, ConrigError> {
         let path = unsafe { self.path.as_ref().unwrap_unchecked() };
         let file = fs::File::open(path).map_err(FileSystemError::OpenConfig)?;
         let mut buf_reader = BufReader::new(file);
@@ -322,13 +324,15 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
         let result = self.file_format.read_str(&contents)?;
         Ok(result)
     }
+}
 
+impl<'a, 'p, T: Serialize> RawConfigFile<'a, 'p, T> {
     /// Serialize and write a value into the configuration file.
     ///
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
-    pub fn write<T: Serialize>(&self, value: &T) -> Result<(), ConrigError> {
+    pub fn write(&self, value: &T) -> Result<(), ConrigError> {
         if let Some(path) = &self.path {
             fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
                 .map_err(FileSystemError::WriteConfig)?;
@@ -352,7 +356,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     /// the configuration file path is valid and exists.
     ///
     /// [`path`]: crate::parser::ConfigFile#structfield.path
-    pub unsafe fn unsafe_write<T: Serialize>(&self, value: &T) -> Result<(), ConrigError> {
+    pub unsafe fn unsafe_write(&self, value: &T) -> Result<(), ConrigError> {
         let path = unsafe { self.path.as_ref().unwrap_unchecked() };
         fs::create_dir_all(path.parent().ok_or(FileSystemError::NoProjectDirectory)?)
             .map_err(FileSystemError::WriteConfig)?;
@@ -364,7 +368,9 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
             .map_err(FileSystemError::OpenConfig)?;
         self.file_format.write(value, &mut file)
     }
+}
 
+impl<'a, 'p, T: Serialize + DeserializeOwned> RawConfigFile<'a, 'p, T> {
     /// Read and deserialize the configuration file.
     /// If the configuration file doesn't exist, a new configuration file will be created,
     /// and it will be filled with the default value provided.
@@ -372,10 +378,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     /// If `path` is `None`, a [`NoConfigurationFile`] error will be returned.
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
-    pub fn read_or_new<T: Serialize + DeserializeOwned>(
-        &self,
-        default: T,
-    ) -> Result<T, ConrigError> {
+    pub fn read_or_new(&self, default: T) -> Result<T, ConrigError> {
         if let Some(path) = &self.path {
             if path.exists() {
                 self.read()
@@ -400,7 +403,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     /// the configuration file path is valid and exists.
     ///
     /// [`path`]: crate::parser::ConfigFile#structfield.path
-    pub unsafe fn unsafe_read_or_new<T: Serialize + DeserializeOwned>(
+    pub unsafe fn unsafe_read_or_new(
         &self,
         default: T,
     ) -> Result<T, ConrigError> {
@@ -414,7 +417,9 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
             Ok(default)
         }
     }
+}
 
+impl<'a, 'p, T: Serialize + DeserializeOwned + Default> RawConfigFile<'a, 'p, T> {
     /// Read and deserialize the configuration file.
     /// If the configuration file doesn't exist, a new configuration file will be created,
     /// and it will be filled with the default value of your structure.
@@ -425,7 +430,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     ///
     /// [`NoConfigurationFile`]: crate::ConrigError::NoConfigurationFile
     /// [`read_or_new`]: crate::parser::ConfigFile::read_or_new
-    pub fn read_or_default<T: Serialize + DeserializeOwned + Default>(
+    pub fn read_or_default(
         &self,
     ) -> Result<T, ConrigError> {
         self.read_or_new(T::default())
@@ -444,7 +449,7 @@ impl<'a, 'p> RawConfigFile<'a, 'p> {
     ///
     /// [`path`]: crate::parser::ConfigFile#structfield.path
     /// [`unsafe_read_or_new`]: crate::parser::ConfigFile#method.unsafe_read_or_new
-    pub unsafe fn unsafe_read_or_default<T: Serialize + DeserializeOwned + Default>(
+    pub unsafe fn unsafe_read_or_default(
         &self,
     ) -> Result<T, ConrigError> {
         unsafe { self.unsafe_read_or_new(T::default()) }

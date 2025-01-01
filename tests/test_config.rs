@@ -1,5 +1,6 @@
+use conrig::conrig;
 use conrig::path::ConfigType;
-use conrig::{ConfigOption, ConfigPathMetadata, FileFormat, ProjectPath};
+use conrig::{ConfigOption, FileFormat, ProjectPath};
 use serde_derive::{Deserialize, Serialize};
 use std::env::{current_dir, set_current_dir};
 
@@ -7,22 +8,6 @@ use std::env::{current_dir, set_current_dir};
 fn test_config() -> Result<(), Box<dyn std::error::Error>> {
     set_current_dir(current_dir()?.join("tests"))?;
 
-    const TEST_APP_CONFIG: ConfigPathMetadata = ConfigPathMetadata {
-        project_path: ProjectPath {
-            qualifier: "org",
-            organization: "embers-of-the-fire",
-            application: "conrig",
-        },
-        config_name: &["conrig"],
-        config_option: ConfigOption {
-            allow_dot_prefix: true,
-            config_sys_type: ConfigType::Config,
-            sys_override_local: false,
-        },
-        extra_files: &[],
-        extra_folders: &[],
-        default_format: FileFormat::Toml,
-    };
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct Config {
         name: String,
@@ -37,6 +22,23 @@ fn test_config() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+
+    conrig!(const TEST_APP_CONFIG<Config> = {
+        project_path: ProjectPath {
+            qualifier: "org",
+            organization: "embers-of-the-fire",
+            application: "conrig",
+        },
+        config_name: &["conrig"],
+        config_option: ConfigOption {
+            allow_dot_prefix: true,
+            config_sys_type: ConfigType::Config,
+            sys_override_local: false,
+        },
+        extra_files: &[],
+        extra_folders: &[],
+        default_format: FileFormat::Toml,
+    });
 
     println!("{:?}", TEST_APP_CONFIG.default_sys_config_file());
     println!("{:?}", TEST_APP_CONFIG.default_local_config_file());
@@ -62,22 +64,6 @@ fn test_config() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_extra_cfg() -> Result<(), Box<dyn std::error::Error>> {
-    const TEST_APP_CONFIG: ConfigPathMetadata = ConfigPathMetadata {
-        project_path: ProjectPath {
-            qualifier: "org",
-            organization: "embers-of-the-fire",
-            application: "conrig-cfg",
-        },
-        config_name: &["conrig-cfg"],
-        config_option: ConfigOption {
-            allow_dot_prefix: true,
-            config_sys_type: ConfigType::Config,
-            sys_override_local: false,
-        },
-        extra_files: &[concat!(env!("CARGO_MANIFEST_DIR"), "/conrig.cfg")],
-        extra_folders: &[],
-        default_format: FileFormat::Toml,
-    };
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct Config {
         name: String,
@@ -92,6 +78,23 @@ fn test_extra_cfg() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+
+    conrig!(const TEST_APP_CONFIG<Config> = {
+        project_path: ProjectPath {
+            qualifier: "org",
+            organization: "embers-of-the-fire",
+            application: "conrig-cfg",
+        },
+        config_name: &["conrig-cfg"],
+        config_option: ConfigOption {
+            allow_dot_prefix: true,
+            config_sys_type: ConfigType::Config,
+            sys_override_local: false,
+        },
+        extra_files: &[concat!(env!("CARGO_MANIFEST_DIR"), "/conrig.cfg")],
+        extra_folders: &[],
+        default_format: FileFormat::Toml,
+    });
 
     std::fs::write(
         concat!(env!("CARGO_MANIFEST_DIR"), "/conrig.cfg.json"),
