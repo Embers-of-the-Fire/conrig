@@ -45,6 +45,11 @@ pub struct ConfigPathMetadata<'p, T> {
     pub extra_files: &'p [&'p str],
     /// Extra configuration options.
     pub config_option: ConfigOption,
+    /// A marker for the type of the configuration.
+    /// 
+    /// This will be automatically filled if you use the [`conrig!`][macro] macro.
+    /// 
+    /// [macro]: crate::conrig
     pub _marker: PhantomData<T>,
 }
 
@@ -167,7 +172,7 @@ impl<'p, T> ConfigPathMetadata<'p, T> {
     ///
     /// The sequence is determined by [`ConfigOption.sys_override_local`].
     ///
-    /// [sys]: crate::ConfigPathMetadata::sys_dir
+    /// [sys]: crate::ProjectPath::sys_dir
     /// [`ConfigOption.sys_override_local`]: crate::ConfigOption#structfield.sys_override_local
     pub fn search_config_file<'a>(&'a self) -> Result<RawConfigFile<'a, 'p, T>, ConrigError> {
         fn make_paths<'a>(
@@ -427,8 +432,8 @@ impl<'a> ProjectPath<'a> {
     /// [`ConfigOption.config_sys_type`]: crate::ConfigOption#strutfield.config_sys_type
     /// [pref]: crate::ConfigType::Preference
     /// [config]: crate::ConfigType::Config
-    /// [`sys_preference_dir`]: crate::ConfigPathMetadata::sys_preference_dir
-    /// [`sys_config_dir`]: crate::ConfigPathMetadata::sys_config_dir
+    /// [`sys_preference_dir`]: crate::ProjectPath::sys_preference_dir
+    /// [`sys_config_dir`]: crate::ProjectPath::sys_config_dir
     pub fn sys_dir(&self, cfg_sys_type: ConfigType) -> Option<PathBuf> {
         match cfg_sys_type {
             ConfigType::Preference => self.sys_preference_dir(),

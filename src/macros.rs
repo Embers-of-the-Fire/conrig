@@ -1,3 +1,5 @@
+//! Utility macro for building a `ConfigPathMetadata` struct.
+
 /// Initializes a `ConfigPathMetadata` struct with the given fields.
 ///
 /// This will **automatically** fill the `_marker` field with a `PhantomData` marker.
