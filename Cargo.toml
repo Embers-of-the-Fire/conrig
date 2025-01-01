@@ -15,14 +15,14 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 directories = "5.0.1"
-serde = "1.0.203"
-thiserror = "1.0.61"
+serde = "1.0.217"
+thiserror = "2.0.9"
 
 ## optional – config file format
 ron = { version =  "0.8.1", optional = true }
-serde_json = { version = "1.0.117", optional = true }
+serde_json = { version = "1.0.134", optional = true }
 serde_yaml = { version = "0.9.34", optional = true }
-toml = { version = "0.8.13", optional = true }
+toml = { version = "0.8.19", optional = true }
 cfg-if = "1.0.0"
 
 [features]
