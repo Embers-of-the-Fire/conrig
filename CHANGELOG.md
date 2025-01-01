@@ -1,5 +1,10 @@
 # Changelog
 
+## V 0.4.0
+
+- Add `conrig` macro for a better creation of the main structure.
+- Add one more generic field for `ConfigPathMetadata` and related types. The configuration system is now pre-typed.
+
 ## V 0.3.0
 
 - Move `ConfigPathMetadata::sys_config_dir`, `ConfigPathMetadata::sys_preference_dir`
